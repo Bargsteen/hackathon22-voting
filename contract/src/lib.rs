@@ -45,7 +45,7 @@ struct VotingView {
     end_time: Timestamp,
 }
 
-#[derive(Reject, Serial, PartialEq, Eq, Debug)]
+#[derive(Reject, Serial, PartialEq, Eq, Debug, SchemaType)]
 enum VotingError {
     VotingFinished,
     InvalidVoteIndex,
