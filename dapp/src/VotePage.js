@@ -1,8 +1,9 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {useParams} from "react-router-dom";
-import {Col, Container, Form, Row} from "react-bootstrap";
+import {Col, Container, Form, Row, Button} from "react-bootstrap";
 import Wallet, {init} from "./Wallet";
-import {toBuffer} from "@concordium/web-sdk";
+import {toBuffer, verifyMessageSignature, AccountTransactionType, GtuAmount, ModuleReference} from "@concordium/web-sdk";
+import {CONTRACT_NAME, MODULE_REF, RAW_SCHEMA_BASE64} from "./config";
 import {decodeString, decodeStringIntMap, decodeStrings} from "./buffer";
 
 async function getVotes(client, contractIndex) {
@@ -12,6 +13,28 @@ async function getVotes(client, contractIndex) {
         method: "voting.getvotes",
     });
 }
+
+async function castVote(client, contractIndex, vote, senderAddress){
+    console.log(typeof vote);
+    const parameter = {
+        vote: Number.parseInt(vote)
+    };
+
+    const txHash = await client.sendTransaction(
+        senderAddress,
+        AccountTransactionType.UpdateSmartContractInstance,
+        {
+            amount: new GtuAmount(0),
+            contractAddress: {index: BigInt(contractIndex), subindex: BigInt(0)},
+            receiveName: "voting.vote",
+            maxContractExecutionEnergy: BigInt(30000),
+        },
+        parameter,
+        RAW_SCHEMA_BASE64,
+    );
+    console.log({txHash});
+}
+
 
 const VotePage = (props) => {
     const params = useParams();
@@ -87,11 +110,17 @@ const VotePage = (props) => {
                             <Form.Check
                                 type="radio"
                                 label={v}
-                                id={`default-radio`}
+                                key={v}
+                                id={`default-radio-`+v}
                                 onChange={() => setSelectionOption(v)}
                                 checked={selectedOption === v}
                             />
                         )}
+                    <Button
+                        className="w-100"
+                        onClick={() => castVote(client, electionId, votes?.opts.indexOf(selectedOption), connectedAccount)}
+                    >Cast Vote</Button>
+
                     </Form>
                     <ul>
                     </ul>
