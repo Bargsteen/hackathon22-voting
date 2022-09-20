@@ -1,18 +1,10 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {useParams} from "react-router-dom";
-import {Col, Container, Form, Row, Button} from "react-bootstrap";
-import Wallet, {init} from "./Wallet";
-import {toBuffer, verifyMessageSignature, AccountTransactionType, GtuAmount, ModuleReference} from "@concordium/web-sdk";
-import {CONTRACT_NAME, MODULE_REF, RAW_SCHEMA_BASE64} from "./config";
-import {decodeString, decodeStringIntMap, decodeStrings} from "./buffer";
-
-async function getVotes(client, contractIndex) {
-    console.log('getting votes', {contractIndex})
-    return client.getJsonRpcClient().invokeContract({
-        contract: {index: BigInt(contractIndex), subindex: BigInt(0)},
-        method: "voting.getvotes",
-    });
-}
+import {Button, Col, Container, Form, Row} from "react-bootstrap";
+import Wallet, {getVotes, init} from "./Wallet";
+import {decodeVotingView} from "./buffer";
+import {AccountTransactionType, GtuAmount} from "@concordium/web-sdk";
+import {RAW_SCHEMA_BASE64} from "./config";
 
 async function castVote(client, contractIndex, vote, senderAddress){
     console.log(typeof vote);
@@ -71,16 +63,7 @@ const VotePage = (props) => {
     const votes = useMemo(
         () => {
             if (getvotesResult) {
-                const offset0 = 0;
-                const buffer = toBuffer(getvotesResult.returnValue, 'hex');
-                const [descriptionText, offset1] = decodeString(buffer, offset0);
-                const [opts, offset2] = decodeStrings(buffer, offset1);
-                const [tally, _] = decodeStringIntMap(buffer, offset2);
-                return {
-                    descriptionText,
-                    opts,
-                    tally,
-                };
+                return decodeVotingView(getvotesResult.returnValue);
             }
         }
     );
