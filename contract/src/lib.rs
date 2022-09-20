@@ -144,3 +144,12 @@ fn finalize<S: HasStateApi>(
 
     Ok(())
 }
+
+// Tests //
+
+#[concordium_cfg_test]
+mod tests {
+    use super::*;
+    use concordium_std::test_infrastructure::*;
+
+}
