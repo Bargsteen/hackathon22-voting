@@ -15,6 +15,7 @@ const CreateElectionPage = () => {
     const [description, setDescription] = useState();
     const [options, setOptions] = useState([]);
     const [optionInput, setOptionInput] = useState("");
+    const [deadlineMinutesInput, setDeadlineMinutesInput] = useState("30");
 
     return (
         <Container>
@@ -44,6 +45,14 @@ const CreateElectionPage = () => {
                         </InputGroup>
                         <Button type="text" variant="outline-secondary" onClick={() => setOptions([])}>Clear</Button>
                     </Form>
+                    <h2>Deadline</h2>
+                    <InputGroup className="mb-3">
+                        <Form.Control
+                            placeholder="Number of minutes."
+                            value={deadlineMinutesInput}
+                            onChange={e => setDeadlineMinutesInput(e.target.value)}
+                        />
+                    </InputGroup>
                 </Col>
             </Row>
         </Container>
