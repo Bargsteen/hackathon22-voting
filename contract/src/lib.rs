@@ -13,6 +13,12 @@ struct Description {
 
 type VotingOption = String;
 
+#[derive(Reject, Serial)]
+enum VotingError {
+    AlreadyFinalized,
+    InvalidVoteIndex,
+}
+
 type Vote = u32;
 
 #[derive(Serial, DeserialWithState, StateClone)]
@@ -30,12 +36,13 @@ struct InitParameter {
     endtime: Timestamp,
 }
 
-type VotingResult = ();
+type FinalTally = ();
+type VotingResult<T> = Result<T, VotingError>;
 
 #[derive(Serial, Deserial, Clone)]
 enum VoteState {
     Voting,
-    Finalized(VotingResult),
+    Finalized(FinalTally),
 }
 
 #[init(contract = "voting", parameter = "InitParameter")]
@@ -52,10 +59,18 @@ fn init<S: HasStateApi>(
     })
 }
 
-#[receive(contract = "voting", name = "receive")]
-fn receive<S: HasStateApi>(
+#[receive(contract = "voting", name = "vote", parameter = "Vote")]
+fn vote<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
     _host: &impl HasHost<State<S>, StateApiType = S>,
-) -> ReceiveResult<()> {
+) -> VotingResult<()> {
+    Ok(())
+}
+
+#[receive(contract = "voting", name = "finalize")]
+fn finalize<S: HasStateApi>(
+    _ctx: &impl HasReceiveContext,
+    _host: &impl HasHost<State<S>, StateApiType = S>,
+) -> VotingResult<()> {
     Ok(())
 }
