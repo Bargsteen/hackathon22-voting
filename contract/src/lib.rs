@@ -66,12 +66,8 @@ enum FinalizationError {
     VoteStillActive,
     VoteAlreadyFinalized,
 }
+
 type FinalizationResult<T> = Result<T, FinalizationError>;
-#[derive(Reject, Serial)]
-enum ViewError {
-    GenericError,
-}
-type ViewResult<T> = Result<T, ViewError>;
 
 #[init(contract = "voting", parameter = "InitParameter")]
 fn init<S: HasStateApi>(
@@ -87,7 +83,13 @@ fn init<S: HasStateApi>(
     })
 }
 
-#[receive(contract = "voting", name = "vote", mutable, parameter = "Vote")]
+#[receive(
+    contract = "voting",
+    name = "vote",
+    mutable,
+    parameter = "Vote",
+    error = "VotingError"
+)]
 fn vote<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
     host: &mut impl HasHost<State<S>, StateApiType = S>,
@@ -141,11 +143,11 @@ fn get_tally<S: HasStateApi>(
 
 /// We assume that all ballots contain a valid voteoption index this should be checked by the vote function
 /// Assumption: Each account has at most one vote
-#[receive(contract = "voting", name = "getvotes")]
+#[receive(contract = "voting", name = "getvotes", return_value = "VotingView")]
 fn get_votes<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
     host: &impl HasHost<State<S>, StateApiType = S>,
-) -> ViewResult<VotingView> {
+) -> ReceiveResult<VotingView> {
     let tally = get_tally(&host.state().description.options, &host.state().ballots);
     Ok(VotingView {
         description: host.state().description.clone(),
@@ -220,7 +222,7 @@ mod tests {
 
         let res = vote(&ctx, &mut host);
 
-        claim_eq!(res, Err(VotingError::InvalidVoteIndex)); 
+        claim_eq!(res, Err(VotingError::InvalidVoteIndex));
     }
 
     #[concordium_test]
@@ -234,47 +236,53 @@ mod tests {
         ctx.set_sender(ADDR_ACC_0);
         let mut host = make_test_host(vec!["A".into(), "B".into()], end_time);
         // Vote once
-        let res = vote(&ctx, &mut host); 
-        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
-        claim_eq!(
-            vec![(ACC_0,0)],
-            ballots
-        );
+        let res = vote(&ctx, &mut host);
+        let ballots = host
+            .state()
+            .ballots
+            .iter()
+            .map(|(a, b)| (*a, *b))
+            .collect::<Vec<_>>();
+        claim_eq!(vec![(ACC_0, 0)], ballots);
         // Vote again
         let vote_parameter = to_bytes(&1);
         ctx.set_parameter(&vote_parameter);
-        let res = vote(&ctx, &mut host); 
+        let res = vote(&ctx, &mut host);
 
-        let res = vote(&ctx, &mut host); 
-        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
-        claim_eq!(
-            vec![(ACC_0,1)],
-            ballots
-        );
+        let res = vote(&ctx, &mut host);
+        let ballots = host
+            .state()
+            .ballots
+            .iter()
+            .map(|(a, b)| (*a, *b))
+            .collect::<Vec<_>>();
+        claim_eq!(vec![(ACC_0, 1)], ballots);
         // Another vote
         let vote_parameter = to_bytes(&0);
         ctx.set_parameter(&vote_parameter);
         ctx.set_sender(ADDR_ACC_1);
 
-        let res = vote(&ctx, &mut host); 
-        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
-        claim_eq!(
-            vec![(ACC_0,1),(ACC_1,0)],
-            ballots
-        );
+        let res = vote(&ctx, &mut host);
+        let ballots = host
+            .state()
+            .ballots
+            .iter()
+            .map(|(a, b)| (*a, *b))
+            .collect::<Vec<_>>();
+        claim_eq!(vec![(ACC_0, 1), (ACC_1, 0)], ballots);
         // Vote yet again
         let vote_parameter = to_bytes(&1);
         ctx.set_parameter(&vote_parameter);
         ctx.set_sender(ADDR_ACC_0);
 
-        let res = vote(&ctx, &mut host); 
-        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
-        claim_eq!(
-            vec![(ACC_0,1),(ACC_1,0)],
-            ballots
-        );     
-
-        
+        let res = vote(&ctx, &mut host);
+        let ballots = host
+            .state()
+            .ballots
+            .iter()
+            .map(|(a, b)| (*a, *b))
+            .collect::<Vec<_>>();
+        claim_eq!(vec![(ACC_0, 1), (ACC_1, 0)], ballots);
     }
 
     fn make_test_host(options: Vec<String>, end_time: Timestamp) -> TestHost<State<TestStateApi>> {
