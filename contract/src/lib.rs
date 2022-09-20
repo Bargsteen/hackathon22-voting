@@ -244,10 +244,28 @@ mod tests {
         ];
         let mut state_builder = TestStateBuilder::new();
         let mut ballots = state_builder.new_map();
-        for i in 0..10 {
+        let actual_total_votes: VoteCount = 11;
+        for i in 0..actual_total_votes {
             ballots.insert(AccountAddress([i as u8; 32]), i % 3);
         }
         let tally = get_tally(&options, &ballots);
-        claim_eq!(tally.total_votes, 10, "Should count all votes")
+        claim_eq!(
+            tally.total_votes,
+            actual_total_votes,
+            "Should count all votes"
+        );
+        let total_options: VoteCount = options.len() as VoteCount;
+        for (i, entry) in options.iter().enumerate() {
+            let mut expected_votes = actual_total_votes / total_options;
+            if (i as VoteCount) < actual_total_votes % total_options {
+                expected_votes += 1;
+            }
+            dbg!(i, expected_votes, tally.result.get(entry));
+            claim_eq!(
+                tally.result.get(entry),
+                Some(&expected_votes),
+                "Should count votes correctly"
+            );
+        }
     }
 }
