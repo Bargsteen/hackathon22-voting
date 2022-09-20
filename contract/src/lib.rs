@@ -64,7 +64,7 @@ type VotingResult<T> = Result<T, VotingError>;
 #[derive(Reject, Serial)]
 enum FinalizationError {
     VoteStillActive,
-    VoteAlreadyFinalized,
+    //VoteAlreadyFinalized,
 }
 
 type FinalizationResult<T> = Result<T, FinalizationError>;
@@ -230,13 +230,14 @@ mod tests {
         let end_time = Timestamp::from_timestamp_millis(100);
         let current_time = Timestamp::from_timestamp_millis(0);
         let mut ctx = TestReceiveContext::empty();
+
+        // Vote once
         let vote_parameter = to_bytes(&0);
         ctx.set_parameter(&vote_parameter);
         ctx.set_metadata_slot_time(current_time);
         ctx.set_sender(ADDR_ACC_0);
         let mut host = make_test_host(vec!["A".into(), "B".into()], end_time);
-        // Vote once
-        let res = vote(&ctx, &mut host);
+        let _res = vote(&ctx, &mut host);
         let ballots = host
             .state()
             .ballots
@@ -244,12 +245,11 @@ mod tests {
             .map(|(a, b)| (*a, *b))
             .collect::<Vec<_>>();
         claim_eq!(vec![(ACC_0, 0)], ballots);
+
         // Vote again
         let vote_parameter = to_bytes(&1);
         ctx.set_parameter(&vote_parameter);
-        let res = vote(&ctx, &mut host);
-
-        let res = vote(&ctx, &mut host);
+        let _res = vote(&ctx, &mut host);
         let ballots = host
             .state()
             .ballots
@@ -257,12 +257,12 @@ mod tests {
             .map(|(a, b)| (*a, *b))
             .collect::<Vec<_>>();
         claim_eq!(vec![(ACC_0, 1)], ballots);
+
         // Another vote
         let vote_parameter = to_bytes(&0);
         ctx.set_parameter(&vote_parameter);
         ctx.set_sender(ADDR_ACC_1);
-
-        let res = vote(&ctx, &mut host);
+        let _res = vote(&ctx, &mut host);
         let ballots = host
             .state()
             .ballots
@@ -270,12 +270,12 @@ mod tests {
             .map(|(a, b)| (*a, *b))
             .collect::<Vec<_>>();
         claim_eq!(vec![(ACC_0, 1), (ACC_1, 0)], ballots);
+
         // Vote yet again
         let vote_parameter = to_bytes(&1);
         ctx.set_parameter(&vote_parameter);
         ctx.set_sender(ADDR_ACC_0);
-
-        let res = vote(&ctx, &mut host);
+        let _res = vote(&ctx, &mut host);
         let ballots = host
             .state()
             .ballots
