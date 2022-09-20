@@ -14,22 +14,19 @@ struct Description {
 }
 
 type VotingOption = String;
-
-#[derive(Reject, Serial)]
-enum VotingError {
-    VotingFinished,
-    InvalidVoteIndex,
-    ParsingFailed,
-    ContractVoter,
-}
-
-impl From<ParseError> for VotingError {
-    fn from(_: ParseError) -> Self {
-        VotingError::ParsingFailed
-    }
-}
-
 type Vote = u32;
+type VoteCount = u32;
+
+#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
+struct FinalTally {
+    stats: BTreeMap<VotingOption,VoteCount>,
+}
+
+#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
+enum VoteState {
+    Voting,
+    Finalized(FinalTally),
+}
 
 #[derive(Serial, DeserialWithState, StateClone)]
 #[concordium(state_parameter = "S")]
@@ -46,10 +43,19 @@ struct InitParameter {
     endtime: Timestamp,
 }
 
-#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
-struct FinalTally {
-    winner: Option<VotingOption>,
-    stats: BTreeMap<VotingOption,Vote>,
+
+#[derive(Reject, Serial)]
+enum VotingError {
+    VotingFinished,
+    InvalidVoteIndex,
+    ParsingFailed,
+    ContractVoter,
+}
+
+impl From<ParseError> for VotingError {
+    fn from(_: ParseError) -> Self {
+        VotingError::ParsingFailed
+    }
 }
 
 type VotingResult<T> = Result<T, VotingError>;
@@ -61,11 +67,6 @@ enum FinalizationError {
 }
 type FinalizationResult<T> = Result<T, FinalizationError>;
 
-#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
-enum VoteState {
-    Voting,
-    Finalized(FinalTally),
-}
 
 #[init(contract = "voting", parameter = "InitParameter")]
 fn init<S: HasStateApi>(
@@ -132,21 +133,12 @@ fn finalize<S: HasStateApi>(
 
     let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
 
-    for (addr, ballot_index) in &mut host.state().ballots.iter() {
+    for (_, ballot_index) in &mut host.state().ballots.iter() {
         let entry = &host.state().description.options[*ballot_index as usize];
         stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
     }
 
-    let mut winner: Option<VotingOption> = None;
-    let mut max = 0;
-    for (entry, count) in &stats {
-        if *count > max {
-            winner = Some(entry.clone());
-            max = *count;
-        }
-    }
-
-    let tally = FinalTally{ winner, stats };
+    let tally = FinalTally{ stats };
 
     host.state_mut().vote_state = VoteState::Finalized(tally);
 
