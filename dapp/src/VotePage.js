@@ -15,10 +15,12 @@ async function getVotes(client, contractIndex) {
 }
 
 async function castVote(client, contractIndex, vote, senderAddress){
+
+    console.log(vote);
     console.log(typeof vote);
-    const parameter = {
-        vote: Number.parseInt(vote)
-    };
+    const parameter = Number.parseInt(vote);
+    console.log(typeof parameter);
+    console.log(parameter);
 
     const txHash = await client.sendTransaction(
         senderAddress,
@@ -29,7 +31,7 @@ async function castVote(client, contractIndex, vote, senderAddress){
             receiveName: "voting.vote",
             maxContractExecutionEnergy: BigInt(30000),
         },
-        parameter,
+        vote,
         RAW_SCHEMA_BASE64,
     );
     console.log({txHash});
@@ -118,7 +120,7 @@ const VotePage = (props) => {
                         )}
                     <Button
                         className="w-100"
-                        onClick={() => castVote(client, electionId, votes?.opts.indexOf(selectedOption), connectedAccount)}
+                        onClick={() => castVote(client, electionId, votes?.opts.indexOf(selectedOption).toString(), connectedAccount)}
                     >Cast Vote</Button>
 
                     </Form>
