@@ -24,6 +24,14 @@ export async function connect(client, setConnectedAccount) {
     return setConnectedAccount(account);
 }
 
+export async function getVotes(client, contractIndex) {
+    return client.getJsonRpcClient().invokeContract({
+        contract: {index: BigInt(contractIndex), subindex: BigInt(0)},
+        method: "voting.getvotes",
+    });
+}
+
+
 export default function Wallet(props) {
     const {client, connectedAccount, setConnectedAccount} = props;
     return (
