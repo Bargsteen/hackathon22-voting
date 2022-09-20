@@ -190,7 +190,9 @@ mod tests {
     use concordium_std::test_infrastructure::*;
 
     const ACC_0: AccountAddress = AccountAddress([0; 32]);
+    const ACC_1: AccountAddress = AccountAddress([1; 32]);
     const ADDR_ACC_0: Address = Address::Account(ACC_0);
+    const ADDR_ACC_1: Address = Address::Account(ACC_1);
 
     #[concordium_test]
     fn test_vote_after_finish_time() {
@@ -218,7 +220,61 @@ mod tests {
 
         let res = vote(&ctx, &mut host);
 
-        claim_eq!(res, Err(VotingError::InvalidVoteIndex));
+        claim_eq!(res, Err(VotingError::InvalidVoteIndex)); 
+    }
+
+    #[concordium_test]
+    fn test_vote_with_valid_index() {
+        let end_time = Timestamp::from_timestamp_millis(100);
+        let current_time = Timestamp::from_timestamp_millis(0);
+        let mut ctx = TestReceiveContext::empty();
+        let vote_parameter = to_bytes(&0);
+        ctx.set_parameter(&vote_parameter);
+        ctx.set_metadata_slot_time(current_time);
+        ctx.set_sender(ADDR_ACC_0);
+        let mut host = make_test_host(vec!["A".into(), "B".into()], end_time);
+        // Vote once
+        let res = vote(&ctx, &mut host); 
+        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
+        claim_eq!(
+            vec![(ACC_0,0)],
+            ballots
+        );
+        // Vote again
+        let vote_parameter = to_bytes(&1);
+        ctx.set_parameter(&vote_parameter);
+        let res = vote(&ctx, &mut host); 
+
+        let res = vote(&ctx, &mut host); 
+        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
+        claim_eq!(
+            vec![(ACC_0,1)],
+            ballots
+        );
+        // Another vote
+        let vote_parameter = to_bytes(&0);
+        ctx.set_parameter(&vote_parameter);
+        ctx.set_sender(ADDR_ACC_1);
+
+        let res = vote(&ctx, &mut host); 
+        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
+        claim_eq!(
+            vec![(ACC_0,1),(ACC_1,0)],
+            ballots
+        );
+        // Vote yet again
+        let vote_parameter = to_bytes(&1);
+        ctx.set_parameter(&vote_parameter);
+        ctx.set_sender(ADDR_ACC_0);
+
+        let res = vote(&ctx, &mut host); 
+        let ballots = host.state().ballots.iter().map(|(a,b)| (*a, *b)).collect::<Vec<_>>();
+        claim_eq!(
+            vec![(ACC_0,1),(ACC_1,0)],
+            ballots
+        );     
+
+        
     }
 
     fn make_test_host(options: Vec<String>, end_time: Timestamp) -> TestHost<State<TestStateApi>> {
