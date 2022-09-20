@@ -15,8 +15,16 @@ type VotingOption = String;
 
 #[derive(Reject, Serial)]
 enum VotingError {
-    AlreadyFinalized,
+    VotingFinished,
     InvalidVoteIndex,
+    ParsingFailed,
+    ContractVoter,
+}
+
+impl From<ParseError> for VotingError {
+    fn from(_: ParseError) -> Self {
+        VotingError::ParsingFailed
+    }
 }
 
 type Vote = u32;
@@ -59,11 +67,36 @@ fn init<S: HasStateApi>(
     })
 }
 
-#[receive(contract = "voting", name = "vote", parameter = "Vote")]
+#[receive(contract = "voting", name = "vote", mutable, parameter = "Vote")]
 fn vote<S: HasStateApi>(
-    _ctx: &impl HasReceiveContext,
-    _host: &impl HasHost<State<S>, StateApiType = S>,
+    ctx: &impl HasReceiveContext,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> VotingResult<()> {
+    // Check that the election hasn't finished yet.
+    if ctx.metadata().slot_time() > host.state().endtime
+        || matches!(host.state().vote_state, VoteState::Finalized(_))
+    {
+        return Err(VotingError::VotingFinished);
+    }
+    // Ensure that the sender is an account.
+    let acc = match ctx.sender() {
+        Address::Account(acc) => acc,
+        Address::Contract(_) => return Err(VotingError::ContractVoter),
+    };
+    let new_vote: Vote = ctx.parameter_cursor().get()?;
+
+    // check that vote is in range
+    ensure!(
+        (new_vote as usize) < host.state().description.options.len(),
+        VotingError::InvalidVoteIndex
+    );
+
+    // Insert or replace the vote for the account.
+    host.state_mut()
+        .ballots
+        .entry(acc)
+        .and_modify(|vote| *vote = new_vote)
+        .or_insert(new_vote);
     Ok(())
 }
 
