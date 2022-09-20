@@ -12,7 +12,7 @@ type VotingOption = String;
 type Vote = u32;
 type VoteCount = u32;
 
-#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
+#[derive(Serial, Deserial, Clone, Eq, PartialEq, SchemaType)]
 struct Tally {
     result: BTreeMap<VotingOption, VoteCount>,
     total_votes: VoteCount,
@@ -189,56 +189,65 @@ mod tests {
     use super::*;
     use concordium_std::test_infrastructure::*;
 
+    const ACC_0: AccountAddress = AccountAddress([0; 32]);
+    const ADDR_ACC_0: Address = Address::Account(ACC_0);
+
     #[concordium_test]
     fn test_vote_after_finish_time() {
         let end_time = Timestamp::from_timestamp_millis(100);
         let current_time = Timestamp::from_timestamp_millis(200);
         let mut ctx = TestReceiveContext::empty();
         ctx.set_metadata_slot_time(current_time);
-        let mut state_builder = TestStateBuilder::new();
-        let state = State {
-            description: Description {
-                description_text: String::new(),
-                options: Vec::new(),
-            },
-            ballots: state_builder.new_map(),
-            end_time,
-        };
-        let mut host = TestHost::new(state, state_builder);
+        let mut host = make_test_host(Vec::new(), end_time);
 
         let res = vote(&ctx, &mut host);
 
         claim_eq!(res, Err(VotingError::VotingFinished));
     }
 
-    fn get_test_state(config: InitParameter, amount: Amount) -> TestHost<State<TestStateApi>> {
+    #[concordium_test]
+    fn test_vote_with_invalid_index() {
+        let end_time = Timestamp::from_timestamp_millis(100);
+        let current_time = Timestamp::from_timestamp_millis(0);
+        let mut ctx = TestReceiveContext::empty();
+        let vote_parameter = to_bytes(&4);
+        ctx.set_parameter(&vote_parameter);
+        ctx.set_metadata_slot_time(current_time);
+        ctx.set_sender(ADDR_ACC_0);
+        let mut host = make_test_host(vec!["A".into(), "B".into()], end_time);
+
+        let res = vote(&ctx, &mut host);
+
+        claim_eq!(res, Err(VotingError::InvalidVoteIndex));
+    }
+
+    fn make_test_host(options: Vec<String>, end_time: Timestamp) -> TestHost<State<TestStateApi>> {
         let mut state_builder = TestStateBuilder::new();
         let state = State {
-            description: config.description,
+            description: Description {
+                description_text: "Test description".into(),
+                options,
+            },
             // vote_state: VoteState::Voting,
             ballots: state_builder.new_map(),
-            end_time: config.end_time,
+            end_time,
         };
-        let mut host = TestHost::new(state, state_builder);
-        host.set_self_balance(amount);
-        host
+        TestHost::new(state, state_builder)
     }
 
     #[concordium_test]
-    fn test_tally(){
-        let options = vec![VotingOption::from("Blue"), VotingOption::from("Bitcoin"), VotingOption::from("Coffee")];
+    fn test_tally() {
+        let options = vec![
+            VotingOption::from("Blue"),
+            VotingOption::from("Bitcoin"),
+            VotingOption::from("Coffee"),
+        ];
         let mut state_builder = TestStateBuilder::new();
         let mut ballots = state_builder.new_map();
-        for i in 0..10{
+        for i in 0..10 {
             ballots.insert(AccountAddress([i as u8; 32]), i % 3);
         }
         let tally = get_tally(&options, &ballots);
-        claim_eq!(
-            tally.total_votes,
-            10,
-            "Should count all votes"
-        )
-
-    }   
-
+        claim_eq!(tally.total_votes, 10, "Should count all votes")
+    }
 }
