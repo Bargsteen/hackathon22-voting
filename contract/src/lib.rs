@@ -2,11 +2,6 @@ use std::collections::BTreeMap;
 
 use concordium_std::*;
 
-// init
-// vote
-// finalize
-// view functions
-
 #[derive(Serial, Deserial, SchemaType, Clone)]
 struct Description {
     description_text: String,
@@ -19,39 +14,38 @@ type VoteCount = u32;
 
 #[derive(Serial, Deserial, Clone, Eq, PartialEq)]
 struct Tally {
-    result: BTreeMap<VotingOption,VoteCount>,
-    total_votes: VoteCount
+    result: BTreeMap<VotingOption, VoteCount>,
+    total_votes: VoteCount,
 }
 
-#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
-enum VoteState {
-    Voting,
-    Finalized(Tally),
-}
+// #[derive(Serial, Deserial, Clone, Eq, PartialEq)]
+// enum VoteState {
+//     Voting,
+//     Finalized(Tally),
+// }
 
 #[derive(Serial, DeserialWithState, StateClone)]
 #[concordium(state_parameter = "S")]
 struct State<S> {
     description: Description,
-    vote_state: VoteState,
+    // vote_state: VoteState,
     ballots: StateMap<AccountAddress, Vote, S>,
-    endtime: Timestamp,
+    end_time: Timestamp,
 }
 
 #[derive(Deserial, SchemaType)]
 struct InitParameter {
     description: Description,
-    endtime: Timestamp,
+    end_time: Timestamp,
 }
 #[derive(Serial, Deserial, SchemaType)]
 struct VotingView {
     description: Description,
     tally: Tally,
-    endtime: Timestamp
+    end_time: Timestamp,
 }
 
-
-#[derive(Reject, Serial)]
+#[derive(Reject, Serial, PartialEq, Eq, Debug)]
 enum VotingError {
     VotingFinished,
     InvalidVoteIndex,
@@ -79,7 +73,6 @@ enum ViewError {
 }
 type ViewResult<T> = Result<T, ViewError>;
 
-
 #[init(contract = "voting", parameter = "InitParameter")]
 fn init<S: HasStateApi>(
     ctx: &impl HasInitContext,
@@ -88,9 +81,9 @@ fn init<S: HasStateApi>(
     let param: InitParameter = ctx.parameter_cursor().get()?;
     Ok(State {
         description: param.description,
-        vote_state: VoteState::Voting,
+        // vote_state: VoteState::Voting,
         ballots: state_builder.new_map(),
-        endtime: param.endtime,
+        end_time: param.end_time,
     })
 }
 
@@ -100,9 +93,7 @@ fn vote<S: HasStateApi>(
     host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> VotingResult<()> {
     // Check that the election hasn't finished yet.
-    if ctx.metadata().slot_time() > host.state().endtime
-        || matches!(host.state().vote_state, VoteState::Finalized(_))
-    {
+    if ctx.metadata().slot_time() > host.state().end_time {
         return Err(VotingError::VotingFinished);
     }
     // Ensure that the sender is an account.
@@ -127,16 +118,25 @@ fn vote<S: HasStateApi>(
     Ok(())
 }
 
-fn get_tally<S: HasStateApi>(options: &Vec<VotingOption>, ballots: &StateMap<AccountAddress, Vote, S>) -> Tally {
-    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
+fn get_tally<S: HasStateApi>(
+    options: &Vec<VotingOption>,
+    ballots: &StateMap<AccountAddress, Vote, S>,
+) -> Tally {
+    let mut stats: BTreeMap<VotingOption, Vote> = BTreeMap::new();
 
-    for (_,ballot_index) in ballots.iter() {
+    for (_, ballot_index) in ballots.iter() {
         let entry = &options[*ballot_index as usize];
-        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
+        stats
+            .entry(entry.clone())
+            .and_modify(|curr| *curr += 1)
+            .or_insert(1);
     }
     let total = stats.values().sum();
-    
-    Tally{ result: stats, total_votes: total }
+
+    Tally {
+        result: stats,
+        total_votes: total,
+    }
 }
 
 /// We assume that all ballots contain a valid voteoption index this should be checked by the vote function
@@ -146,8 +146,12 @@ fn get_votes<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
     host: &impl HasHost<State<S>, StateApiType = S>,
 ) -> ViewResult<VotingView> {
-    let tally = get_tally(&host.state().description.options,&host.state().ballots);
-    Ok(VotingView{ description: host.state().description.clone(), tally, endtime: host.state().endtime })
+    let tally = get_tally(&host.state().description.options, &host.state().ballots);
+    Ok(VotingView {
+        description: host.state().description.clone(),
+        tally,
+        end_time: host.state().end_time,
+    })
 }
 
 /// We assume that all ballots contain a valid voteoption index this should be checked by the vote function
@@ -158,19 +162,22 @@ fn finalize<S: HasStateApi>(
     host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> FinalizationResult<()> {
     // Ensure the auction has not been finalized yet
-    ensure_eq!(
-        host.state().vote_state,
-        VoteState::Voting,
-        FinalizationError::VoteAlreadyFinalized
-    );
+    // ensure_eq!(
+    //     host.state().vote_state,
+    //     VoteState::Voting,
+    //     FinalizationError::VoteAlreadyFinalized
+    // );
 
     let slot_time = ctx.metadata().slot_time();
     // Ensure the auction has ended already
-    ensure!(slot_time > host.state().endtime, FinalizationError::VoteStillActive);
+    ensure!(
+        slot_time > host.state().end_time,
+        FinalizationError::VoteStillActive
+    );
 
-    let tally = get_tally(&host.state().description.options,&host.state().ballots);
+    let _tally = get_tally(&host.state().description.options, &host.state().ballots);
 
-    host.state_mut().vote_state = VoteState::Finalized(tally);
+    // host.state_mut().vote_state = VoteState::Finalized(tally);
 
     Ok(())
 }
@@ -182,13 +189,35 @@ mod tests {
     use super::*;
     use concordium_std::test_infrastructure::*;
 
+    #[concordium_test]
+    fn test_vote_after_finish_time() {
+        let end_time = Timestamp::from_timestamp_millis(100);
+        let current_time = Timestamp::from_timestamp_millis(200);
+        let mut ctx = TestReceiveContext::empty();
+        ctx.set_metadata_slot_time(current_time);
+        let mut state_builder = TestStateBuilder::new();
+        let state = State {
+            description: Description {
+                description_text: String::new(),
+                options: Vec::new(),
+            },
+            ballots: state_builder.new_map(),
+            end_time,
+        };
+        let mut host = TestHost::new(state, state_builder);
+
+        let res = vote(&ctx, &mut host);
+
+        claim_eq!(res, Err(VotingError::VotingFinished));
+    }
+
     fn get_test_state(config: InitParameter, amount: Amount) -> TestHost<State<TestStateApi>> {
         let mut state_builder = TestStateBuilder::new();
         let state = State {
             description: config.description,
-            vote_state: VoteState::Voting,
+            // vote_state: VoteState::Voting,
             ballots: state_builder.new_map(),
-            endtime: config.endtime,
+            end_time: config.end_time,
         };
         let mut host = TestHost::new(state, state_builder);
         host.set_self_balance(amount);
