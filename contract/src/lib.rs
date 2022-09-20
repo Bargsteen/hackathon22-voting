@@ -36,7 +36,7 @@ struct State<S> {
 #[derive(Deserial, SchemaType)]
 struct InitParameter {
     description: Description,
-    end_time: Timestamp,
+    end_time: Timestamp
 }
 #[derive(Serial, Deserial, SchemaType)]
 struct VotingView {
@@ -44,6 +44,19 @@ struct VotingView {
     tally: Tally,
     end_time: Timestamp,
 }
+
+
+#[derive(Reject, Serial, PartialEq, Eq, Debug, SchemaType)]
+enum ListError {
+    ParsingFailed,
+    CallFailed
+}
+impl From<ParseError> for ListError {
+    fn from(_: ParseError) -> Self {
+        ListError::ParsingFailed
+    }
+}
+type ListResult<T> = Result<T, ListError>;
 
 #[derive(Reject, Serial, PartialEq, Eq, Debug, SchemaType)]
 enum VotingError {
@@ -67,7 +80,67 @@ enum FinalizationError {
     //VoteAlreadyFinalized,
 }
 
+
 type FinalizationResult<T> = Result<T, FinalizationError>;
+#[derive(Serial, Deserial, SchemaType)]
+struct VoteListState {
+    list_votes: Vec<ContractAddress>
+}
+#[derive(Reject, Serial, PartialEq, Eq, Debug, SchemaType)]
+enum ListAddError {
+    NotAContract,
+    ParsingFailed,
+}
+
+impl From<ParseError> for ListAddError {
+    fn from(_: ParseError) -> Self {
+        ListAddError::ParsingFailed
+    }
+}
+type ListAddResult<T> = Result<T, ListAddError>;
+
+#[init(contract = "votelist")]
+fn init_list<S: HasStateApi>(
+    _ctx: &impl HasInitContext,
+    _state_builder: &mut StateBuilder<S>,
+) -> InitResult<VoteListState> {
+    Ok(VoteListState {
+        list_votes : Vec::new(),
+    })
+}
+
+#[receive(
+    contract = "votelist",
+    name = "add-vote-instance",
+    mutable,
+    parameter = "ContractAddress",
+    error = "ListAddError"
+)]
+fn add_vote_instance<S: HasStateApi>(
+    ctx: &impl HasReceiveContext,
+    host: &mut impl HasHost<VoteListState, StateApiType = S>,
+) -> ListAddResult<()> {
+    // Ensure that the sender is a contract.
+    let acc = match ctx.sender() {
+        Address::Account(_) => return Err(ListAddError::NotAContract),
+        Address::Contract(acc) => acc,
+    };
+
+    host.state_mut().list_votes.push(acc);
+
+    Ok(())
+}
+
+#[receive(
+    contract = "votelist",
+    name = "get-list"
+)]
+fn get_list<S: HasStateApi>(
+    _ctx: &impl HasReceiveContext,
+    host: &impl HasHost<VoteListState, StateApiType = S>,
+) -> ReceiveResult<Vec<ContractAddress>> {
+    Ok(host.state().list_votes.clone())
+}
 
 #[init(contract = "voting", parameter = "InitParameter")]
 fn init<S: HasStateApi>(
@@ -81,6 +154,24 @@ fn init<S: HasStateApi>(
         ballots: state_builder.new_map(),
         end_time: param.end_time,
     })
+}
+
+#[receive(
+    contract = "voting",
+    name = "list-instance",
+    parameter = "ContractAddress",
+    mutable,
+    error = "ListError"
+)]
+fn list_instance<S: HasStateApi>(
+    ctx: &impl HasReceiveContext,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
+) -> ListResult<()> {
+    let addr: ContractAddress = ctx.parameter_cursor().get()?;
+    let param = to_bytes(&ctx.self_address());
+    let res = host.invoke_contract(&addr, &Parameter(&param), EntrypointName::new_unchecked("add-vote-instance"), Amount::zero());
+    ensure!(res.is_ok(), ListError::CallFailed);
+    Ok(())
 }
 
 #[receive(
