@@ -196,31 +196,20 @@ mod tests {
     }
 
     #[concordium_test]
-    fn test_finalization(){
-        //Accounts 
-        let alice = AccountAddress([1u8; 32]); 
-        let bob = AccountAddress([2u8; 32]); 
-        let charlie = AccountAddress([3u8; 32]); 
-        let delta = AccountAddress([4u8; 32]); 
-        let epsilon = AccountAddress([5u8; 32]); 
-        //Initial State
-        let mut host = get_test_state(
-            InitParameter {
-                description : Description {
-                    description_text: String::from("My amazing vote"),
-                    options: vec![VotingOption::from("CCD"),VotingOption::from("Bitcoin"),VotingOption::from("Coffee")]
-                },
-                endtime: Timestamp::from_timestamp_millis(100)
-            },
-            Amount::from_ccd(0),
-        );
-        //Add some ballots
-        host.state_mut().ballots.insert(alice, 0);
-        host.state_mut().ballots.insert(bob, 0);
-        host.state_mut().ballots.insert(charlie, 0);
-        host.state_mut().ballots.insert(delta, 1);
-        host.state_mut().ballots.insert(epsilon, 2);
+    fn test_tally(){
+        let options = vec![VotingOption::from("Blue"), VotingOption::from("Bitcoin"), VotingOption::from("Coffee")];
+        let mut state_builder = TestStateBuilder::new();
+        let mut ballots = state_builder.new_map();
+        for i in 0..10{
+            ballots.insert(AccountAddress([i as u8; 32]), i % 3);
+        }
+        let tally = get_tally(&options, &ballots);
+        claim_eq!(
+            tally.total_votes,
+            10,
+            "Should count all votes"
+        )
 
-    }
+    }   
 
 }
