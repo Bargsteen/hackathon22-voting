@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use concordium_std::*;
 
 // init
@@ -44,7 +46,12 @@ struct InitParameter {
     endtime: Timestamp,
 }
 
-type FinalTally = ();
+#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
+struct FinalTally {
+    winner: Option<VotingOption>,
+    stats: BTreeMap<VotingOption,Vote>,
+}
+
 type VotingResult<T> = Result<T, VotingError>;
 
 #[derive(Reject, Serial)]
@@ -54,7 +61,7 @@ enum FinalizationError {
 }
 type FinalizationResult<T> = Result<T, FinalizationError>;
 
-#[derive(Serial, Deserial, Clone, Eq)]
+#[derive(Serial, Deserial, Clone, Eq, PartialEq)]
 enum VoteState {
     Voting,
     Finalized(FinalTally),
@@ -121,8 +128,27 @@ fn finalize<S: HasStateApi>(
 
     let slot_time = ctx.metadata().slot_time();
     // Ensure the auction has ended already
-    ensure!(slot_time > host.state().end, FinalizationError::VoteStillActive);
-    Ok(())
+    ensure!(slot_time > host.state().endtime, FinalizationError::VoteStillActive);
 
-    
+    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
+
+    for (addr, ballot_index) in &mut host.state().ballots.iter() {
+        let entry = &host.state().description.options[*ballot_index as usize];
+        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
+    }
+
+    let mut winner: Option<VotingOption> = None;
+    let mut max = 0;
+    for (entry, count) in &stats {
+        if *count > max {
+            winner = Some(entry.clone());
+            max = *count;
+        }
+    }
+
+    let tally = FinalTally{ winner, stats };
+
+    host.state_mut().vote_state = VoteState::Finalized(tally);
+
+    Ok(())
 }
