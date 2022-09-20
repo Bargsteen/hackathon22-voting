@@ -127,6 +127,18 @@ fn vote<S: HasStateApi>(
     Ok(())
 }
 
+fn get_tally<S: HasStateApi>(options: &Vec<VotingOption>, ballots: &StateMap<AccountAddress, Vote, S>) -> Tally {
+    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
+
+    for (_,ballot_index) in ballots.iter() {
+        let entry = &options[*ballot_index as usize];
+        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
+    }
+    let total = stats.values().sum();
+    
+    Tally{ result: stats, total_votes: total }
+}
+
 /// We assume that all ballots contain a valid voteoption index this should be checked by the vote function
 /// Assumption: Each account has at most one vote
 #[receive(contract = "voting", name = "getvotes")]
@@ -134,23 +146,7 @@ fn get_votes<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
     host: &impl HasHost<State<S>, StateApiType = S>,
 ) -> ViewResult<VotingView> {
-    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
-
-    for (_, ballot_index) in &mut host.state().ballots.iter() {
-        let entry = &host.state().description.options[*ballot_index as usize];
-        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
-    }
-
-    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
-
-    for (_,ballot_index) in &mut host.state().ballots.iter() {
-        let entry = &host.state().description.options[*ballot_index as usize];
-        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
-    }
-    let total = stats.values().sum();
-    
-    let tally = Tally{ result: stats, total_votes: total };
-
+    let tally = get_tally(&host.state().description.options,&host.state().ballots);
     Ok(VotingView{ description: host.state().description.clone(), tally, endtime: host.state().endtime })
 }
 
@@ -172,16 +168,7 @@ fn finalize<S: HasStateApi>(
     // Ensure the auction has ended already
     ensure!(slot_time > host.state().endtime, FinalizationError::VoteStillActive);
 
-    let mut stats: BTreeMap<VotingOption,Vote> = BTreeMap::new();
-
-    for (_,ballot_index) in &mut host.state().ballots.iter() {
-        let entry = &host.state().description.options[*ballot_index as usize];
-        stats.entry(entry.clone()).and_modify(|curr| *curr += 1).or_insert(1);
-    }
-
-    let total = stats.values().sum();
-    
-    let tally = Tally{ result: stats, total_votes:  total};
+    let tally = get_tally(&host.state().description.options,&host.state().ballots);
 
     host.state_mut().vote_state = VoteState::Finalized(tally);
 
