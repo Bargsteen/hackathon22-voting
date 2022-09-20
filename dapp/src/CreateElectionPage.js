@@ -1,6 +1,5 @@
-/* global BigInt */
 import React, {useEffect, useState} from 'react';
-import {Alert, Button, Col, Container, FloatingLabel, Form, InputGroup, Row} from "react-bootstrap";
+import {Button, Col, Container, FloatingLabel, Form, InputGroup, Row} from "react-bootstrap";
 import {AccountTransactionType, GtuAmount, ModuleReference} from "@concordium/web-sdk";
 import {CONTRACT_NAME, MODULE_REF, RAW_SCHEMA_BASE64} from "./config";
 import moment from "moment";
