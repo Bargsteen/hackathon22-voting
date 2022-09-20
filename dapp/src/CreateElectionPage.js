@@ -1,10 +1,10 @@
 /* global BigInt */
 import React, {useEffect, useState} from 'react';
 import {Alert, Button, Col, Container, FloatingLabel, Form, InputGroup, Row} from "react-bootstrap";
-import {detectConcordiumProvider, WalletApi} from "@concordium/browser-wallet-api-helpers";
 import {AccountTransactionType, GtuAmount, ModuleReference} from "@concordium/web-sdk";
 import {CONTRACT_NAME, MODULE_REF, RAW_SCHEMA_BASE64} from "./config";
 import moment from "moment";
+import Wallet, {init} from "./Wallet";
 
 async function addOption(options, setOptions, newOption, setOptionInput) {
     if (options.includes(newOption)) {
@@ -14,11 +14,6 @@ async function addOption(options, setOptions, newOption, setOptionInput) {
         setOptions([...options, newOption]);
         setOptionInput("");
     }
-}
-
-async function connect(client: WalletApi, setConnectedAccount) {
-    const account = await client.connect();
-    return setConnectedAccount(account);
 }
 
 async function initContract(client, contractName, description, options, deadlineMinutesInput, moduleRef, senderAddress) {
@@ -60,46 +55,22 @@ const CreateElectionPage = () => {
     // Attempt to initialize Browser Wallet Client.
     useEffect(
         () => {
-            detectConcordiumProvider()
-                .then(client => {
-                    setClient(client);
-                    // Listen for relevant events from the wallet.
-                    client.on('accountChanged', account => {
-                        console.debug('browserwallet event: accountChange', {account});
-                        setConnectedAccount(account);
-                    });
-                    client.on('accountDisconnected', () => {
-                        console.debug('browserwallet event: accountDisconnected');
-                        client.getMostRecentlySelectedAccount().then(setConnectedAccount);
-                    });
-                    client.on('chainChanged', (chain) => {
-                        console.debug('browserwallet event: chainChanged', {chain});
-                    });
-                    // Check if you are already connected
-                    client.getMostRecentlySelectedAccount().then(setConnectedAccount);
-                    return client;
-                })
+            init(setConnectedAccount)
+                .then(setClient)
                 .catch(console.error);
-        }, []);
+        },
+        [],
+    );
 
     return (
         <Container>
             <Row>
-
                 <Col>
-                    {!connectedAccount && (
-                        <>
-                            <p>No wallet connection</p>
-                            <Button onClick={() => connect(client, setConnectedAccount).catch(console.error)}>
-                                Connect
-                            </Button>
-                        </>
-                    )}
-                    {connectedAccount && (
-                        <Alert variant="success">
-                            Connected to account <code>{connectedAccount}</code>.
-                        </Alert>
-                    )}
+                    <Wallet
+                        client={client}
+                        connectedAccount={connectedAccount}
+                        setConnectedAccount={setConnectedAccount}
+                    />
                 </Col>
             </Row>
             <Row>
@@ -114,7 +85,7 @@ const CreateElectionPage = () => {
                         />
                     </FloatingLabel>
                     <h2>Options</h2>
-                    <ul>{options?.map(opt => <li>{opt}</li>)}</ul>
+                    <ul>{options?.map(opt => <li key={opt}>{opt}</li>)}</ul>
                     <Form onSubmit={e => {
                         e.preventDefault();
                         addOption(options, setOptions, optionInput, setOptionInput).catch(console.error);

@@ -12,8 +12,8 @@ function App() {
         <Routes>
           {/*<Route exact path='/' exact element={<Home />} />*/}
           <Route path='/create' element={<CreateElectionPage/>} />
-          <Route path='/vote' element={<VotePage/>} />
-          <Route path='/results' element={<Results/>} />
+          <Route path='/vote/:electionId' element={<VotePage/>} />
+          <Route path='/results/:electionId' element={<Results/>} />
         </Routes>
       </Router>
   );

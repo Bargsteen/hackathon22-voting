@@ -1,7 +1,9 @@
-import React, {useState} from 'react';
+import React from 'react';
+import {useParams} from "react-router-dom";
 
 const Results = (props) => {
-    const [electionId, setElectionId] = useState(51);
+    const params = useParams();
+    const {electionId} = params;
     return (
         <div>
             <h1>Results for election {electionId}</h1>
