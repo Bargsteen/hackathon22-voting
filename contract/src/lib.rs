@@ -39,6 +39,12 @@ struct InitParameter {
 type FinalTally = ();
 type VotingResult<T> = Result<T, VotingError>;
 
+#[derive(Reject, Serial)]
+enum FinalizationError {
+    GenericError,
+}
+type FinalizationResult<T> = Result<T, FinalizationError>;
+
 #[derive(Serial, Deserial, Clone)]
 enum VoteState {
     Voting,
@@ -67,10 +73,11 @@ fn vote<S: HasStateApi>(
     Ok(())
 }
 
-#[receive(contract = "voting", name = "finalize")]
+#[receive(contract = "voting", mutable, name = "finalize")]
 fn finalize<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    _host: &impl HasHost<State<S>, StateApiType = S>,
-) -> VotingResult<()> {
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
+) -> FinalizationResult<()> {
+
     Ok(())
 }
