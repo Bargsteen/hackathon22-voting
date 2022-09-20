@@ -41,11 +41,12 @@ type VotingResult<T> = Result<T, VotingError>;
 
 #[derive(Reject, Serial)]
 enum FinalizationError {
-    GenericError,
+    VoteStillActive,
+    VoteAlreadyFinalized,
 }
 type FinalizationResult<T> = Result<T, FinalizationError>;
 
-#[derive(Serial, Deserial, Clone)]
+#[derive(Serial, Deserial, Clone, Eq)]
 enum VoteState {
     Voting,
     Finalized(FinalTally),
@@ -75,9 +76,20 @@ fn vote<S: HasStateApi>(
 
 #[receive(contract = "voting", mutable, name = "finalize")]
 fn finalize<S: HasStateApi>(
-    _ctx: &impl HasReceiveContext,
+    ctx: &impl HasReceiveContext,
     host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> FinalizationResult<()> {
+    // Ensure the auction has not been finalized yet
+    ensure_eq!(
+        host.state().vote_state,
+        VoteState::Voting,
+        FinalizationError::VoteAlreadyFinalized
+    );
 
+    let slot_time = ctx.metadata().slot_time();
+    // Ensure the auction has ended already
+    ensure!(slot_time > host.state().end, FinalizationError::VoteStillActive);
     Ok(())
+
+    
 }
