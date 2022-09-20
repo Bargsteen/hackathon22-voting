@@ -7,23 +7,24 @@ import {AccountTransactionType, GtuAmount} from "@concordium/web-sdk";
 import {RAW_SCHEMA_BASE64} from "./config";
 
 async function castVote(client, contractIndex, vote, senderAddress){
-
+    const parameter = Number.parseInt(vote);
     console.log(vote);
     console.log(typeof vote);
-    const parameter = Number.parseInt(vote);
     console.log(typeof parameter);
     console.log(parameter);
+
+
 
     const txHash = await client.sendTransaction(
         senderAddress,
         AccountTransactionType.UpdateSmartContractInstance,
         {
-            amount: new GtuAmount(0),
+            amount: new GtuAmount(BigInt(0)),
             contractAddress: {index: BigInt(contractIndex), subindex: BigInt(0)},
             receiveName: "voting.vote",
             maxContractExecutionEnergy: BigInt(30000),
         },
-        vote,
+        parameter,
         RAW_SCHEMA_BASE64,
     );
     console.log({txHash});
